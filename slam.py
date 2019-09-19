@@ -19,17 +19,28 @@ class Display(object):
         window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
         cv2.moveWindow("video", *self.offsets)
 
+        orb = cv2.ORB_create()
         while vidcap.isOpened():
             success, frame = vidcap.read()
             if success:
-                # transpose frame
-                frame = cv2.transpose(frame)
+                frame = self.process_frame(orb, frame)
                 cv2.imshow("video", frame)
                 if cv2.waitKey(25) & 0xFF == ord('q'):
                     break
 
         vidcap.release()
         cv2.destroyAllWindows()
+
+    def process_frame(self, orb, frame):
+        # rotate frame
+        frame = cv2.transpose(frame)
+        frame = cv2.flip(frame, 1)
+
+        # orb feature
+        kp, des = orb.detectAndCompute(frame, None)
+        frame = cv2.drawKeypoints(frame, kp, None, color=(0, 255, 0))
+
+        return frame
 
 
 def main():

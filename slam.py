@@ -1,7 +1,8 @@
 import pdb
 import numpy as np
 import cv2
-import os
+from skimage.measure import ransac
+from skimage.transform import FundamentalMatrixTransform
 
 
 class Display(object):
@@ -15,14 +16,14 @@ class Display(object):
     def draw(self):
         # read video frame by frame
         vidcap = cv2.VideoCapture(self.path)
-        _, frame = vidcap.read()
+        success, frame = vidcap.read()
 
         window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
         cv2.moveWindow("video", *self.offsets)
 
         orb = cv2.ORB_create()
-        bf_matcher  = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        while vidcap.isOpened():
+        bf_matcher  = cv2.BFMatcher(cv2.NORM_HAMMING)
+        while success:
             success, frame = vidcap.read()
             if success:
                 frame = self.process_frame(frame, orb, bf_matcher)
@@ -41,18 +42,33 @@ class Display(object):
         # feature extraction
         feats = cv2.goodFeaturesToTrack(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-            1000, qualityLevel=0.01, minDistance=3)
+            3000, qualityLevel=0.01, minDistance=3)
         kp = [cv2.KeyPoint(*f[0], _size=3)  for f in feats]
         kp, des = orb.compute(frame, kp)
         frame_ = cv2.drawKeypoints(frame, kp, None, color=(0, 255, 0))
 
         # matching
+        good = []
         if self.prev is not None:
-            matches = matcher.match(des, self.prev[2])
-            for m in matches:
-                print(m.trainIdx, m.queryIdx)
-                p1, p2 = self.prev[1][m.trainIdx].pt, kp[m.queryIdx].pt
-                p1, p2 = tuple(map(int, p1)), tuple(map(int, p2))
+            matches = matcher.knnMatch(des, self.prev[2], k=2)
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    p1, p2 = self.prev[1][m.trainIdx].pt, kp[m.queryIdx].pt
+                    p1, p2 = tuple(map(int, p1)), tuple(map(int, p2))
+                    good.append([p1, p2])
+
+            good = np.asarray(good)
+
+            # fundamental matrix estimation
+            model, inliers = ransac((good[:, 0], good[:, 1]),
+                                    FundamentalMatrixTransform,
+                                    min_samples=8,
+                                    residual_threshold=1,
+                                    max_trials=100)
+
+            print("inliers: %d/%d" % (len(good), sum(inliers)))
+            good = good[inliers]
+            for m in good:
                 cv2.line(frame_, p1, p2, (0, 255, 0), 1)
         self.prev = (frame, kp, des)
         return frame_

@@ -66,7 +66,7 @@ class Display(object):
                                     residual_threshold=1,
                                     max_trials=100)
 
-            print("inliers: %d/%d" % (len(good), sum(inliers)))
+            print("inliers: %d/%d" % (sum(inliers), len(good)))
             good = good[inliers]
             for m in good:
                 cv2.line(frame_, p1, p2, (0, 255, 0), 1)

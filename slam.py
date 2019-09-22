@@ -54,15 +54,6 @@ class FrameDisplay(object):
         return frame
 
 
-class MapRenderer(object):
-
-    def __init__(self):
-        pass
-
-    def render(self):
-        pass
-
-
 def main():
     path = "./test2.mp4"
     extractor = FeatureExtractor()

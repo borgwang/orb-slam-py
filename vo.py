@@ -5,6 +5,7 @@ import numpy as np
 from skimage.measure import ransac
 from skimage.transform import EssentialMatrixTransform
 
+np.set_printoptions(suppress=True)
 
 W, H = 720, 1280
 F = 240
@@ -36,7 +37,7 @@ class FeatureExtractor(object):
         self.matcher  = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     def extract(self, frame):
-        # feature extraction
+        # extract feature 
         feats = cv2.goodFeaturesToTrack(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
             4000, qualityLevel=0.01, minDistance=3)
@@ -59,6 +60,13 @@ class FeatureExtractor(object):
 
 class PoseEstimator(object):
 
+    @property
+    def pose0(self):
+        pose = np.array([[1, 0, 0, 0],
+                         [0, 1, 0, 0],
+                         [0, 0, 1, 0]])
+        return pose.astype(float)
+
     def estimate(self, points):
         A_pts, B_pts = points[:, 0, :], points[:, 1, :]
 
@@ -70,19 +78,23 @@ class PoseEstimator(object):
                                 EssentialMatrixTransform,
                                 min_samples=8,
                                 residual_threshold=0.001,
-                                max_trials=1000)
-        pose = self._recover_pose(model.params, A_pts, B_pts)
+                                max_trials=500)
+        Rt = self.extract_Rt(model.params, A_pts, B_pts)
 
+        # triangulate ot get 3D points
+        pts4d = cv2.triangulatePoints(self.pose0, Rt, A_pts.T, B_pts.T).T
+        print(pts4d)
+
+        # denormalize
         A_pts = denormalize(A_pts[inliers])
         B_pts = denormalize(B_pts[inliers])
 
         points = np.stack([A_pts, B_pts], axis=1).astype(int)
         print("inliers: %d/%d" % (sum(inliers), len(points)))
-
-        return points, pose
+        return points, Rt
 
     @staticmethod
-    def _recover_pose(E, A_pts, B_pts):
+    def extract_Rt(E, A_pts, B_pts):
         _, R, t, _ = cv2.recoverPose(E, A_pts, B_pts)
         Rt = np.concatenate([R, t], axis=1)
         return Rt

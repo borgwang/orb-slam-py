@@ -6,7 +6,7 @@ from vo import FeatureExtractor
 from vo import PoseEstimator
 
 
-class Display(object):
+class FrameDisplay(object):
 
     def __init__(self, path, extractor, pose_estimator):
         self.offsets = (200, 500)
@@ -35,14 +35,16 @@ class Display(object):
         cv2.destroyAllWindows()
 
     def process_frame(self, frame):
-        # preprocessing
+        # frame preprocessing
         frame = cv2.transpose(frame)
         frame = cv2.flip(frame, 1)
 
-        # extract features
+        # extract keypoints from latest two frams and match them
         point_pairs = self.extractor.extract(frame)
         if not len(point_pairs):
             return frame
+
+        # estimate pose from point_pairs
         point_pairs, pose = self.pose_estimator.estimate(point_pairs)
 
         # plot
@@ -52,11 +54,20 @@ class Display(object):
         return frame
 
 
+class MapRenderer(object):
+
+    def __init__(self):
+        pass
+
+    def render(self):
+        pass
+
+
 def main():
     path = "./test2.mp4"
     extractor = FeatureExtractor()
     pose_estimator = PoseEstimator()
-    display = Display(path, extractor, pose_estimator)
+    display = FrameDisplay(path, extractor, pose_estimator)
     display.draw()
 
 

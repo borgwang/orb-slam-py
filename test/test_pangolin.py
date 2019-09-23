@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.getcwd())
 
 import numpy as np
-import pypangolin as pango
+import lib.pypangolin as pango
 from OpenGL.GL import *
 
 

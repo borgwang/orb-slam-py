@@ -2,7 +2,7 @@ from multiprocessing import Process
 
 import numpy as np
 
-import pypangolin as pango
+import lib.pypangolin as pango
 from OpenGL.GL import *
 
 

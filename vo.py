@@ -61,7 +61,7 @@ class FeatureExtractor(object):
 class PoseEstimator(object):
 
     @property
-    def pose0(self):
+    def pose1(self):
         pose = np.array([[1, 0, 0, 0],
                          [0, 1, 0, 0],
                          [0, 0, 1, 0]])
@@ -82,20 +82,24 @@ class PoseEstimator(object):
         Rt = self.extract_Rt(model.params, A_pts, B_pts)
 
         # triangulate ot get 3D points
-        pts4d = cv2.triangulatePoints(self.pose0, Rt, A_pts.T, B_pts.T).T
-        print(pts4d)
+        points3d = self.triangulate(Rt, self.pose1, B_pts.T, A_pts.T)
 
         # denormalize
         A_pts = denormalize(A_pts[inliers])
         B_pts = denormalize(B_pts[inliers])
 
-        points = np.stack([A_pts, B_pts], axis=1).astype(int)
+        point_pairs = np.stack([A_pts, B_pts], axis=1).astype(int)
         print("inliers: %d/%d" % (sum(inliers), len(points)))
-        return points, Rt
+        return point_pairs, points3d
 
     @staticmethod
     def extract_Rt(E, A_pts, B_pts):
         _, R, t, _ = cv2.recoverPose(E, A_pts, B_pts)
         Rt = np.concatenate([R, t], axis=1)
         return Rt
+
+    @staticmethod
+    def triangulate(pose1, pose2, points1, points2):
+        pts4d = cv2.triangulatePoints(pose1, pose2, points1, points2).T
+        return pts4d[:, :3]
 

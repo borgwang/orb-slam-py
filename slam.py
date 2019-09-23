@@ -4,16 +4,18 @@ import cv2
 
 from vo import FeatureExtractor
 from vo import PoseEstimator
+from renderer import Renderer
 
 
 class FrameDisplay(object):
 
-    def __init__(self, path, extractor, pose_estimator):
+    def __init__(self, path):
         self.offsets = (200, 500)
         self.path = path
 
-        self.extractor = extractor
-        self.pose_estimator = pose_estimator
+        self.extractor = FeatureExtractor()
+        self.pose_estimator = PoseEstimator()
+        self.renderer = Renderer()
 
     def draw(self):
         # read video frame by frame
@@ -45,7 +47,8 @@ class FrameDisplay(object):
             return frame
 
         # estimate pose from point_pairs
-        point_pairs, pose = self.pose_estimator.estimate(point_pairs)
+        point_pairs, points3d = self.pose_estimator.estimate(point_pairs)
+        self.renderer.queue.put(points3d)
 
         # plot
         for p1, p2 in point_pairs:
@@ -55,10 +58,8 @@ class FrameDisplay(object):
 
 
 def main():
-    path = "./test2.mp4"
-    extractor = FeatureExtractor()
-    pose_estimator = PoseEstimator()
-    display = FrameDisplay(path, extractor, pose_estimator)
+    path = "./test.mp4"
+    display = FrameDisplay(path)
     display.draw()
 
 

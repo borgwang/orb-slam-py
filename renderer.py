@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 
 import numpy as np
 
@@ -12,17 +12,17 @@ class Renderer(object):
         self.scam, self.dcam = None, None
         self.handler = None
         self.process = None
+        self.queue = Queue()
+        self.hist = []
 
-    def run(self):
-        # init process
-        self.process = Process(target=self.render, args=())
-        self.process.start()
-        self.process.join()
+        p = Process(target=self.render, args=(self.queue,))
+        p.daemon = True
+        p.start()
 
-    def render(self):
+    def render(self, queue):
         self.init()
         while not pango.ShouldQuit():
-            self.refresh()
+            self.refresh(queue)
 
     def init(self):
         pango.CreateWindowAndBind("main", 640, 480)
@@ -37,21 +37,19 @@ class Renderer(object):
             pango.Attach(0), pango.Attach(1),
             pango.Attach(0), pango.Attach(1), -640.0/480.0).SetHandler(self.handler)
 
-    def refresh(self):
+    def refresh(self, queue):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glClearColor(1.0, 1.0, 1.0, 1.0)
-        self.dcam.Activate(self.scam)
-        pango.glDrawColouredCube()
 
-        ## point cloud
-        points = np.random.random((10000, 3))
-        colors = np.zeros((len(points), 3))
-        colors[:, 1] = 1 - points[:, 0]
-        colors[:, 2] = 1 - points[:, 1]
-        colors[:, 0] = 1 - points[:, 2]
-        points = points * 3 + 1
-        glPointSize(3)
-        self.draw_points(points, colors)
+        self.dcam.Activate(self.scam)
+
+        # point cloud
+        state = queue.get()
+        self.hist.append(state)
+        glPointSize(1)
+        self.draw_points(np.concatenate(self.hist, axis=0), colors=None)
+
+        #pango.glDrawColouredCube()
 
         # finish frame
         pango.FinishFrame()
@@ -64,8 +62,4 @@ class Renderer(object):
             glColor3f(c[0], c[1], c[2])
             glVertex3f(p[0], p[1], p[2])
         glEnd()
-
-
-if __name__ == "__main__":
-    Renderer().run()
 

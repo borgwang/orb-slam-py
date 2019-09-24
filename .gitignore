@@ -2,4 +2,4 @@
 __pycache__
 
 *.mp4
-#.so
+*.so

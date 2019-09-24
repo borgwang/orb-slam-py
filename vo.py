@@ -1,3 +1,4 @@
+from multiprocessing import Queue
 import pdb
 import cv2
 import numpy as np
@@ -9,53 +10,89 @@ np.set_printoptions(suppress=True)
 
 W, H = 720, 1280
 F = 240
-K = np.array([[F, 0, W // 2], [0, F, H // 2], [0, 0, 1]])
+K = np.array([
+    [F, 0, W // 2],
+    [0, F, H // 2],
+    [0, 0, 1]])
 Kinv = np.linalg.inv(K)
 
 
-def add_ones(arr):
-    return np.concatenate([arr, np.ones((arr.shape[0], 1))], axis=1)
+class Frame(object):
 
+    def __init__(self, frame):
+        self._data = frame
+        self.idx = None
 
-def normalize(pts):
-    pts_ = add_ones(pts)
-    ret = (Kinv @ pts_.T).T[:, :2]
-    return ret
-
-
-def denormalize(pts):
-    pts_ = add_ones(pts)
-    ret = (K @ pts_.T).T[:, :2]
-    return ret
-
-
-class FeatureExtractor(object):
-
-    def __init__(self):
-        self.prev = None
-        self.orb = cv2.ORB_create()
-        self.matcher  = cv2.BFMatcher(cv2.NORM_HAMMING)
+        self._features = None
+        self._discriptor = None
+        self.extract(frame)
 
     def extract(self, frame):
-        # extract feature 
+        # extract keypoints and dicriptor
+        orb = cv2.ORB_create()
         feats = cv2.goodFeaturesToTrack(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
             4000, qualityLevel=0.01, minDistance=3)
         kp = [cv2.KeyPoint(*f[0], _size=3)  for f in feats]
-        kp, des = self.orb.compute(frame, kp)
+        kp, des = orb.compute(frame, kp)
+        self._features = kp
+        self._discriptor = des
 
-        # matching
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def features(self):
+        return self._features
+
+    @property
+    def discriptor(self):
+        return self._discriptor
+
+
+class FrameManager(object):
+
+    def __init__(self):
+        self._frames = []
+        self.pose_estimator = PoseEstimator()
+
+    def add(self, frame):
+        frame.idx = self.size
+        self._frames.append(frame)
+
+    @property
+    def size(self):
+        return len(self._frames)
+
+    @property
+    def frames(self):
+        return self._frames
+
+    def match_frames(self, frame1, frame2):
+        # matching two frames
         good = []
-        if self.prev is not None:
-            matches = self.matcher.knnMatch(des, self.prev[2], k=2)
-            for m, n in matches:
-                if m.distance < 0.75 * n.distance:
-                    p1, p2 = self.prev[1][m.trainIdx].pt, kp[m.queryIdx].pt
-                    p1, p2 = tuple(p1), tuple(p2)
-                    good.append([p1, p2])
-            good = np.asarray(good, dtype=int)
-        self.prev = (frame, kp, des)
+        matches = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(
+            frame2.discriptor, frame1.discriptor, k=2)
+        for m, n in matches:
+            if m.distance < 0.75 * n.distance:
+                p1 = frame1.features[m.trainIdx].pt
+                p2 = frame2.features[m.queryIdx].pt
+                p1, p2 = tuple(p1), tuple(p2)
+                good.append([p1, p2])
+        good = np.asarray(good, dtype=int)
         return good
+
+    def reconstruct3d(self):
+        # extrct keypoints and match
+        if self.size < 2:
+            return None, None
+        point_pairs = self.match_frames(self._frames[-2], self._frames[-1])
+        # estimate points
+        point_pairs, points3d = self.pose_estimator.estimate(point_pairs)
+
+        # TODO: add frame to map
+        return point_pairs, points3d
 
 
 class PoseEstimator(object):
@@ -71,8 +108,8 @@ class PoseEstimator(object):
         A_pts, B_pts = points[:, 0, :], points[:, 1, :]
 
         # normalize
-        A_pts = normalize(A_pts)
-        B_pts = normalize(B_pts)
+        A_pts = self.normalize(A_pts)
+        B_pts = self.normalize(B_pts)
 
         model, inliers = ransac((A_pts, B_pts),
                                 EssentialMatrixTransform,
@@ -85,8 +122,8 @@ class PoseEstimator(object):
         points3d = self.triangulate(Rt, self.pose1, B_pts.T, A_pts.T)
 
         # denormalize
-        A_pts = denormalize(A_pts[inliers])
-        B_pts = denormalize(B_pts[inliers])
+        A_pts = self.denormalize(A_pts[inliers])
+        B_pts = self.denormalize(B_pts[inliers])
 
         point_pairs = np.stack([A_pts, B_pts], axis=1).astype(int)
         print("inliers: %d/%d" % (sum(inliers), len(points)))
@@ -95,11 +132,25 @@ class PoseEstimator(object):
     @staticmethod
     def extract_Rt(E, A_pts, B_pts):
         _, R, t, _ = cv2.recoverPose(E, A_pts, B_pts)
-        Rt = np.concatenate([R, t], axis=1)
-        return Rt
+        R_t = np.concatenate([R, t], axis=1)
+        return R_t
 
     @staticmethod
     def triangulate(pose1, pose2, points1, points2):
         pts4d = cv2.triangulatePoints(pose1, pose2, points1, points2).T
         return pts4d[:, :3]
+
+    @staticmethod
+    def _add_ones(arr):
+        return np.concatenate([arr, np.ones((arr.shape[0], 1))], axis=1)
+
+    def normalize(self, pts):
+        pts_ = self._add_ones(pts)
+        ret = (Kinv @ pts_.T).T[:, :2]
+        return ret
+
+    def denormalize(self, pts):
+        pts_ = self._add_ones(pts)
+        ret = (K @ pts_.T).T[:, :2]
+        return ret
 

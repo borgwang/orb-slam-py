@@ -2,8 +2,7 @@ import pdb
 import numpy as np
 import cv2
 
-from vo import FeatureExtractor
-from vo import PoseEstimator
+from vo import Frame, FrameManager
 from renderer import Renderer
 
 
@@ -13,9 +12,10 @@ class FrameDisplay(object):
         self.offsets = (200, 500)
         self.path = path
 
-        self.extractor = FeatureExtractor()
-        self.pose_estimator = PoseEstimator()
-        self.renderer = Renderer()
+        #self.extractor = FeatureExtractor()
+        #self.pose_estimator = PoseEstimator()
+        #self.renderer = Renderer()
+        self.frame_manager = FrameManager()
 
     def draw(self):
         # read video frame by frame
@@ -41,14 +41,11 @@ class FrameDisplay(object):
         frame = cv2.transpose(frame)
         frame = cv2.flip(frame, 1)
 
-        # extract keypoints from latest two frams and match them
-        point_pairs = self.extractor.extract(frame)
-        if not len(point_pairs):
+        self.frame_manager.add(Frame(frame))
+        point_pairs, points3d = self.frame_manager.reconstruct3d()
+        frame = self.frame_manager.frames[-1].data
+        if point_pairs is None:
             return frame
-
-        # estimate pose from point_pairs
-        point_pairs, points3d = self.pose_estimator.estimate(point_pairs)
-        self.renderer.queue.put(points3d)
 
         # plot
         for p1, p2 in point_pairs:

@@ -6,6 +6,8 @@ import numpy as np
 from skimage.measure import ransac
 from skimage.transform import EssentialMatrixTransform
 
+from renderer import Renderer
+
 np.set_printoptions(suppress=True)
 
 W, H = 720, 1280
@@ -56,6 +58,7 @@ class FrameManager(object):
     def __init__(self):
         self._frames = []
         self.pose_estimator = PoseEstimator()
+        self.renderer = Renderer()
 
     def add(self, frame):
         frame.idx = self.size
@@ -73,11 +76,11 @@ class FrameManager(object):
         # matching two frames
         good = []
         matches = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(
-            frame2.discriptor, frame1.discriptor, k=2)
+            frame1.discriptor, frame2.discriptor, k=2)
         for m, n in matches:
             if m.distance < 0.75 * n.distance:
-                p1 = frame1.features[m.trainIdx].pt
-                p2 = frame2.features[m.queryIdx].pt
+                p1 = frame1.features[m.queryIdx].pt
+                p2 = frame2.features[m.trainIdx].pt
                 p1, p2 = tuple(p1), tuple(p2)
                 good.append([p1, p2])
         good = np.asarray(good, dtype=int)
@@ -87,11 +90,12 @@ class FrameManager(object):
         # extrct keypoints and match
         if self.size < 2:
             return None, None
-        point_pairs = self.match_frames(self._frames[-2], self._frames[-1])
+        point_pairs = self.match_frames(self._frames[-1], self._frames[-2])
         # estimate points
         point_pairs, points3d = self.pose_estimator.estimate(point_pairs)
 
         # TODO: add frame to map
+        self.renderer.queue.put(points3d)
         return point_pairs, points3d
 
 
@@ -115,11 +119,11 @@ class PoseEstimator(object):
                                 EssentialMatrixTransform,
                                 min_samples=8,
                                 residual_threshold=0.001,
-                                max_trials=500)
-        Rt = self.extract_Rt(model.params, A_pts, B_pts)
+                                max_trials=300)
+        Rt = self.extract_Rt(model.params, B_pts, A_pts)
 
         # triangulate ot get 3D points
-        points3d = self.triangulate(Rt, self.pose1, B_pts.T, A_pts.T)
+        points3d = self.triangulate(Rt, self.pose1, A_pts.T, B_pts.T)
 
         # denormalize
         A_pts = self.denormalize(A_pts[inliers])
@@ -130,15 +134,18 @@ class PoseEstimator(object):
         return point_pairs, points3d
 
     @staticmethod
-    def extract_Rt(E, A_pts, B_pts):
-        _, R, t, _ = cv2.recoverPose(E, A_pts, B_pts)
+    def extract_Rt(E, pts1, pts2):
+        _, R, t, _ = cv2.recoverPose(E, pts1, pts2)
         R_t = np.concatenate([R, t], axis=1)
         return R_t
 
     @staticmethod
     def triangulate(pose1, pose2, points1, points2):
         pts4d = cv2.triangulatePoints(pose1, pose2, points1, points2).T
-        return pts4d[:, :3]
+        good_pts4d = pts4d[pts4d[:, 3] > 0.003]
+        print("%s/%s" % (len(good_pts4d), len(pts4d)))
+        good_pts4d /= good_pts4d[:, 3:]
+        return good_pts4d[:, :3]
 
     @staticmethod
     def _add_ones(arr):

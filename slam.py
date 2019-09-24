@@ -3,7 +3,6 @@ import numpy as np
 import cv2
 
 from vo import Frame, FrameManager
-from renderer import Renderer
 
 
 class FrameDisplay(object):
@@ -12,9 +11,6 @@ class FrameDisplay(object):
         self.offsets = (200, 500)
         self.path = path
 
-        #self.extractor = FeatureExtractor()
-        #self.pose_estimator = PoseEstimator()
-        #self.renderer = Renderer()
         self.frame_manager = FrameManager()
 
     def draw(self):
@@ -55,7 +51,7 @@ class FrameDisplay(object):
 
 
 def main():
-    path = "./test.mp4"
+    path = "./test2.mp4"
     display = FrameDisplay(path)
     display.draw()
 

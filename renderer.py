@@ -49,8 +49,6 @@ class Renderer(object):
         glPointSize(1)
         self.draw_points(np.concatenate(self.hist, axis=0), colors=None)
 
-        #pango.glDrawColouredCube()
-
         # finish frame
         pango.FinishFrame()
 

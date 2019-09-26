@@ -1,3 +1,4 @@
+import time
 from multiprocessing import Process, Queue
 
 import numpy as np
@@ -23,19 +24,21 @@ class Renderer(object):
         self.init()
         while not pango.ShouldQuit():
             self.refresh(queue)
+            time.sleep(0.2)
 
     def init(self):
-        pango.CreateWindowAndBind("main", 640, 480)
+        w, h = 1024, 768
+        pango.CreateWindowAndBind("main", w, h)
         glEnable(GL_DEPTH_TEST)
 
         self.scam = pango.OpenGlRenderState(
-            pango.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 200),
-            pango.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pango.AxisY))
+            pango.ProjectionMatrix(w, h, 420, 420, w//2, h//2, 0.2, 1000),
+            pango.ModelViewLookAt(0, -10, -8, 0, 0, 0, 0, -1, 0))
 
         self.handler = pango.Handler3D(self.scam)
         self.dcam = pango.CreateDisplay().SetBounds(
             pango.Attach(0), pango.Attach(1),
-            pango.Attach(0), pango.Attach(1), -640.0/480.0).SetHandler(self.handler)
+            pango.Attach(0), pango.Attach(1), -w/h).SetHandler(self.handler)
 
     def refresh(self, queue):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -46,8 +49,9 @@ class Renderer(object):
         # point cloud
         state = queue.get()
         self.hist.append(state)
-        glPointSize(1)
-        self.draw_points(np.concatenate(self.hist, axis=0), colors=None)
+        glPointSize(2)
+        period = np.concatenate(self.hist[-40:], axis=0)
+        self.draw_points(period, colors=None)
 
         # finish frame
         pango.FinishFrame()
@@ -61,3 +65,9 @@ class Renderer(object):
             glVertex3f(p[0], p[1], p[2])
         glEnd()
 
+    def draw_line(self, points, colors=None):
+        glBegin(GL_LINES)
+        for i in range(len(points) - 1):
+            glVertex3f(points[i, 0], points[i, 1], points[i, 2])
+            glVertex3f(points[i+1, 0], points[i+1, 1], points[i+1, 2])
+        glEnd()

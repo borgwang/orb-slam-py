@@ -1,4 +1,3 @@
-import pdb
 import numpy as np
 import cv2
 
@@ -51,11 +50,11 @@ class FrameDisplay(object):
 
 
 def main():
-    path = "./test2.mp4"
+    path = "./test4.mp4"
     display = FrameDisplay(path)
     display.draw()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     main()
 

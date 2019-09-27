@@ -1,5 +1,5 @@
-import numpy as np
 import cv2
+import numpy as np
 
 from vo import Frame, FrameManager
 
@@ -17,14 +17,14 @@ class FrameDisplay(object):
         vidcap = cv2.VideoCapture(self.path)
         success, frame = vidcap.read()
 
-        window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
-        cv2.moveWindow("video", *self.offsets)
+        #window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
+        #cv2.moveWindow("video", *self.offsets)
 
         while success:
             success, frame = vidcap.read()
             if success:
                 frame = self.process_frame(frame)
-                cv2.imshow("video", frame)
+                # cv2.imshow("video", frame)
                 if cv2.waitKey(25) & 0xFF == ord('q'):
                     break
 
@@ -50,7 +50,7 @@ class FrameDisplay(object):
 
 
 def main():
-    path = "./test4.mp4"
+    path = "./test6.mp4"
     display = FrameDisplay(path)
     display.draw()
 

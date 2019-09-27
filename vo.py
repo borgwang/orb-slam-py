@@ -12,7 +12,7 @@ from renderer import Renderer
 np.set_printoptions(suppress=True)
 
 W, H = 720, 1280
-F = 360
+F = 800
 K = np.array([
     [F, 0, W // 2],
     [0, F, H // 2],
@@ -40,7 +40,7 @@ class Frame(object):
         orb = cv2.ORB_create()
         feats = cv2.goodFeaturesToTrack(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-            3000, qualityLevel=0.01, minDistance=3)
+            1000, qualityLevel=0.01, minDistance=7)
         kp = [cv2.KeyPoint(*f[0], _size=3)  for f in feats]
         kp, des = orb.compute(frame, kp)
         self._features = kp
@@ -85,7 +85,7 @@ class FrameManager(object):
         matches = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(
             curr.discriptor, prev.discriptor, k=2)
         for m, n in matches:
-            if m.distance < 0.75 * n.distance:
+            if m.distance < 0.7 * n.distance:
                 p1 = curr.features[m.queryIdx].pt
                 p2 = prev.features[m.trainIdx].pt
                 p1, p2 = tuple(p1), tuple(p2)
@@ -104,12 +104,10 @@ class FrameManager(object):
         point_pairs, points3d = self.pose_estimator.estimate(point_pairs, frame_pair)
 
         # add to points to map
-        self.renderer.queue.put(points3d)
+        msg = {"points": points3d, "pose": self._frames[-1].pose}
+        self.renderer.queue.put(msg)
 
         return point_pairs, points3d
-
-    def estimate_pose(self):
-        pass
 
 
 class PoseEstimator(object):
@@ -131,22 +129,18 @@ class PoseEstimator(object):
         A_pts = self.normalize(A_pts)
         B_pts = self.normalize(B_pts)
 
+        # get R and t
         model, inliers = ransac((A_pts, B_pts),
                                 EssentialMatrixTransform,
                                 #FundamentalMatrixTransform,
                                 min_samples=8,
                                 residual_threshold=0.001,
-                                max_trials=300)
-
+                                max_trials=500)
         Rt = self.extract_Rt(model.params, A_pts, B_pts)
 
         # triangulate ot get 3D points
         curr.pose = Rt @ prev.pose
         points3d = self.triangulate2(curr.pose, prev.pose, A_pts[inliers], B_pts[inliers])
-        print(points3d.shape)
-        print(prev.pose)
-        print(curr.pose)
-        #pdb.set_trace()
 
         # denormalize
         A_pts = self.denormalize(A_pts[inliers])

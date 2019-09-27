@@ -1,3 +1,4 @@
+import argparse
 import cv2
 import numpy as np
 
@@ -17,14 +18,17 @@ class FrameDisplay(object):
         vidcap = cv2.VideoCapture(self.path)
         success, frame = vidcap.read()
 
-        #window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
-        #cv2.moveWindow("video", *self.offsets)
+        if args.display_2d:
+            window = cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow("video", *self.offsets)
 
         while success:
             success, frame = vidcap.read()
             if success:
                 frame = self.process_frame(frame)
-                # cv2.imshow("video", frame)
+
+                if args.display_2d:
+                     cv2.imshow("video", frame)
                 if cv2.waitKey(25) & 0xFF == ord('q'):
                     break
 
@@ -50,11 +54,15 @@ class FrameDisplay(object):
 
 
 def main():
-    path = "./test6.mp4"
-    display = FrameDisplay(path)
+    display = FrameDisplay(args.video_path)
     display.draw()
 
 
 if __name__ == "__main__": 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--video_path", type=str, required=True)
+    parser.add_argument("-d2d", "--display_2d", action="store_true")
+    global args 
+    args = parser.parse_args()
     main()
 
